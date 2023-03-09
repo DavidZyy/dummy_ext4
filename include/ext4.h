@@ -6,6 +6,9 @@
  * 
  * @copyright Copyright (c) 2023
  * Codes stealed from linux fs/ext4/ext4.h
+ * reference: 
+ * [1] linux kernel codes
+ * [2] https://www.kernel.org/doc/html/latest/filesystems/ext4/index.html
  */
 
 #ifndef _EXT4_H
@@ -52,7 +55,8 @@
 #define	EXT4_TIND_BLOCK			(EXT4_DIND_BLOCK + 1)
 #define	EXT4_N_BLOCKS				(EXT4_TIND_BLOCK + 1)
 
-/* the inode number of root directory */
+/* the inode number of root directory, the i_flags of root inode = 0x80000
+	means it use extents, I'm not sure if it's a common case. */
 #define EXT4_ROOT_DIR_INODE_NUM 2
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -292,6 +296,8 @@ struct ext4_group_desc
 
 typedef struct ext4_super_block ext4_super_block_t;
 typedef struct ext4_group_desc ext4_group_desc_t;
+typedef struct ext4_inode	ext4_inode_t;
 
 int ext4_fill_super();
+int ext4_read_ondisk_inode(int inode_num);
 #endif	/* _EXT4_H */
