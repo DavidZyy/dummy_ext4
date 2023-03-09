@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+#define SECTOR_SIZE BSIZE
+
 #define BSIZE 512
 struct buf {
   int valid;   // has data been read from disk?
@@ -15,10 +17,11 @@ struct buf {
   // uint refcnt;
   // struct buf *prev; // LRU cache list
   // struct buf *next;
-  uint8_t data[BSIZE];
+  uint8_t data[SECTOR_SIZE];
   // void *data;
   // todo:
 };
 
-struct buf* bread(uint32_t dev, uint32_t blockno);
+typedef struct buf buf_t;
+buf_t* bread(uint32_t dev, uint32_t blockno);
 #endif

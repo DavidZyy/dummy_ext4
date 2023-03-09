@@ -1,1 +1,1 @@
-sudo umount /mnt
+sudo umount ./ext4_mnt

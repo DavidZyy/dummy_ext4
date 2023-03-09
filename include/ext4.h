@@ -12,8 +12,53 @@
 #define _EXT4_H
 
 #include <stdint.h>
+#include "bio.h"
+
+#define __le8 uint8_t
+#define __le16 uint16_t
+#define __le32 uint32_t
+#define __le64 uint64_t
+
+#define __u8 uint8_t
+#define __u16 uint16_t
+#define __u32 uint32_t
+#define __u64 uint64_t
+
+
+
+/* we can use mkfs.ext4 -b option to specify the block size, here I set it to 1024 bytes, see manual */
+#define EXT4_BLOCK_SIZE			1024
+/* the max counts of block group*/
+#define EXT4_MAX_BG_CNT			10
+
+/* convert block counts to sector counts, one ext4 block size equals to ? physical sector size */
+#define EXT4_BLOCK2SECTOR_CNT		EXT4_BLOCK_SIZE / SECTOR_SIZE
+
+#define EXT4_BLOCKNUM2SECTORNUM(num)	num*EXT4_BLOCK2SECTOR_CNT
 
 #define EXT4_LABEL_MAX			16
+
+/* Padding is at the most beginning of the disk layout */
+#define EXT4_GROUP0_PADDING_BYTES 	1024
+#define EXT4_GROUP0_PADDING_SECTOR_CNT EXT4_GROUP0_PADDING_BYTES / SECTOR_SIZE
+
+/////////////////////////////////////////////////////// inode related//////////////////////////////////////////////////////////////////
+/*
+ * Constants relative to the data blocks
+ */
+#define	EXT4_NDIR_BLOCKS		12
+#define	EXT4_IND_BLOCK			EXT4_NDIR_BLOCKS
+#define	EXT4_DIND_BLOCK			(EXT4_IND_BLOCK + 1)
+#define	EXT4_TIND_BLOCK			(EXT4_DIND_BLOCK + 1)
+#define	EXT4_N_BLOCKS				(EXT4_TIND_BLOCK + 1)
+
+/* the inode number of root directory */
+#define EXT4_ROOT_DIR_INODE_NUM 2
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+/* Finding an inode */
+
 
 /*
  * Structure of the super block (the struct is defined as the data on disk)
@@ -149,4 +194,104 @@ struct ext4_super_block {
 	uint32_t	s_checksum;		/* crc32c(superblock) */
 };
 
+
+/*
+ * Structure of an inode on the disk
+ */
+struct ext4_inode {
+	__le16	i_mode;		/* File mode */
+	__le16	i_uid;		/* Low 16 bits of Owner Uid */
+	__le32	i_size_lo;	/* Size in bytes */
+	__le32	i_atime;	/* Access time */
+	__le32	i_ctime;	/* Inode Change time */
+	__le32	i_mtime;	/* Modification time */
+	__le32	i_dtime;	/* Deletion Time */
+	__le16	i_gid;		/* Low 16 bits of Group Id */
+	__le16	i_links_count;	/* Links count */
+	__le32	i_blocks_lo;	/* Blocks count */
+	__le32	i_flags;	/* File flags */
+	union {
+		struct {
+			__le32  l_i_version;
+		} linux1;
+		struct {
+			__u32  h_i_translator;
+		} hurd1;
+		struct {
+			__u32  m_i_reserved1;
+		} masix1;
+	} osd1;				/* OS dependent 1 */
+	__le32	i_block[EXT4_N_BLOCKS];/* Pointers to blocks */
+	__le32	i_generation;	/* File version (for NFS) */
+	__le32	i_file_acl_lo;	/* File ACL */
+	__le32	i_size_high;
+	__le32	i_obso_faddr;	/* Obsoleted fragment address */
+	union {
+		struct {
+			__le16	l_i_blocks_high; /* were l_i_reserved1 */
+			__le16	l_i_file_acl_high;
+			__le16	l_i_uid_high;	/* these 2 fields */
+			__le16	l_i_gid_high;	/* were reserved2[0] */
+			__le16	l_i_checksum_lo;/* crc32c(uuid+inum+inode) LE */
+			__le16	l_i_reserved;
+		} linux2;
+		struct {
+			__le16	h_i_reserved1;	/* Obsoleted fragment number/size which are removed in ext4 */
+			__u16	h_i_mode_high;
+			__u16	h_i_uid_high;
+			__u16	h_i_gid_high;
+			__u32	h_i_author;
+		} hurd2;
+		struct {
+			__le16	h_i_reserved1;	/* Obsoleted fragment number/size which are removed in ext4 */
+			__le16	m_i_file_acl_high;
+			__u32	m_i_reserved2[2];
+		} masix2;
+	} osd2;				/* OS dependent 2 */
+	__le16	i_extra_isize;
+	__le16	i_checksum_hi;	/* crc32c(uuid+inum+inode) BE */
+	__le32  i_ctime_extra;  /* extra Change time      (nsec << 2 | epoch) */
+	__le32  i_mtime_extra;  /* extra Modification time(nsec << 2 | epoch) */
+	__le32  i_atime_extra;  /* extra Access time      (nsec << 2 | epoch) */
+	__le32  i_crtime;       /* File Creation time */
+	__le32  i_crtime_extra; /* extra FileCreationtime (nsec << 2 | epoch) */
+	__le32  i_version_hi;	/* high 32 bits for 64-bit version */
+	__le32	i_projid;	/* Project ID */
+};
+
+/*
+ * Structure of a blocks group descriptor
+ */
+struct ext4_group_desc
+{
+	__le32	bg_block_bitmap_lo;	/* Blocks bitmap block */
+	__le32	bg_inode_bitmap_lo;	/* Inodes bitmap block */
+	__le32	bg_inode_table_lo;	/* Inodes table block */
+	__le16	bg_free_blocks_count_lo;/* Free blocks count */
+	__le16	bg_free_inodes_count_lo;/* Free inodes count */
+	__le16	bg_used_dirs_count_lo;	/* Directories count */
+	__le16	bg_flags;		/* EXT4_BG_flags (INODE_UNINIT, etc) */
+	__le32  bg_exclude_bitmap_lo;   /* Exclude bitmap for snapshots */
+	__le16  bg_block_bitmap_csum_lo;/* crc32c(s_uuid+grp_num+bbitmap) LE */
+	__le16  bg_inode_bitmap_csum_lo;/* crc32c(s_uuid+grp_num+ibitmap) LE */
+	__le16  bg_itable_unused_lo;	/* Unused inodes count */
+	__le16  bg_checksum;		/* crc16(sb_uuid+group+desc) */
+	__le32	bg_block_bitmap_hi;	/* Blocks bitmap block MSB */
+	__le32	bg_inode_bitmap_hi;	/* Inodes bitmap block MSB */
+	__le32	bg_inode_table_hi;	/* Inodes table block MSB */
+	__le16	bg_free_blocks_count_hi;/* Free blocks count MSB */
+	__le16	bg_free_inodes_count_hi;/* Free inodes count MSB */
+	__le16	bg_used_dirs_count_hi;	/* Directories count MSB */
+	__le16  bg_itable_unused_hi;    /* Unused inodes count MSB */
+	__le32  bg_exclude_bitmap_hi;   /* Exclude bitmap block MSB */
+	__le16  bg_block_bitmap_csum_hi;/* crc32c(s_uuid+grp_num+bbitmap) BE */
+	__le16  bg_inode_bitmap_csum_hi;/* crc32c(s_uuid+grp_num+ibitmap) BE */
+	__u32   bg_reserved;
+};
+
+
+typedef struct ext4_super_block ext4_super_block_t;
+typedef struct ext4_group_desc ext4_group_desc_t;
+
+int ext4_fill_super();
 #endif	/* _EXT4_H */

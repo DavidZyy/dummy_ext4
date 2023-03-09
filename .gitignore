@@ -1,3 +1,4 @@
 *.img
 *.txt
 /build
+/ext4_mnt
