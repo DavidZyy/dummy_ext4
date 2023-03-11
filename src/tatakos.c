@@ -16,22 +16,47 @@
 #include "tatakos.h"
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <assert.h>
 
 struct buf buffer;
 
 const char *fs_img = "/home/zhuyangyang/project/OS/dummy_ext4/ext4_fs.img";
 
+/**
+ * The block here refers to sector.
+ */
 struct buf* bread(uint32_t dev, uint32_t blockno)
 {
   struct buf *b = &buffer;
 
   int fd = open(fs_img, O_RDWR);
 
-  lseek(fd, blockno*BSIZE, SEEK_SET);
+  lseek(fd, blockno*SECTOR_SIZE, SEEK_SET);
 
-  read(fd, (buffer.data), BSIZE);
+  read(fd, b->data, SECTOR_SIZE);
 
   close(fd);
 
-  return &buffer;
+  return b;
+}
+
+
+void bwrite(struct buf *b){
+  int fd = open(fs_img, O_RDWR);
+
+  assert(b->blockno != 0);
+  lseek(fd, b->blockno*SECTOR_SIZE, SEEK_SET);
+
+  write(fd, b->data, SECTOR_SIZE);
+
+  close(fd);
+}
+
+void panic(char *s) {
+  printf(rd("panic: "));
+  printf(rd("%s"), s);
+  printf("\n");
+  for(;;)
+    ;
 }

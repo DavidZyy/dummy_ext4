@@ -17,6 +17,44 @@
 #include <stdint.h>
 #include "tatakos.h"
 
+/* in octal */
+#define S_IFMT  00170000
+#define S_IFSOCK 0140000
+#define S_IFLNK	 0120000
+#define S_IFREG  0100000
+#define S_IFBLK  0060000
+#define S_IFDIR  0040000
+#define S_IFCHR  0020000
+#define S_IFIFO  0010000
+#define S_ISUID  0004000
+#define S_ISGID  0002000
+#define S_ISVTX  0001000
+
+#define S_ISLNK(m)	(((m) & S_IFMT) == S_IFLNK)
+#define S_ISREG(m)	(((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m)	(((m) & S_IFMT) == S_IFDIR)
+#define S_ISCHR(m)	(((m) & S_IFMT) == S_IFCHR)
+#define S_ISBLK(m)	(((m) & S_IFMT) == S_IFBLK)
+#define S_ISFIFO(m)	(((m) & S_IFMT) == S_IFIFO)
+#define S_ISSOCK(m)	(((m) & S_IFMT) == S_IFSOCK)
+
+#define S_IRWXU 00700
+#define S_IRUSR 00400
+#define S_IWUSR 00200
+#define S_IXUSR 00100
+
+#define S_IRWXG 00070
+#define S_IRGRP 00040
+#define S_IWGRP 00020
+#define S_IXGRP 00010
+
+#define S_IRWXO 00007
+#define S_IROTH 00004
+#define S_IWOTH 00002
+#define S_IXOTH 00001
+
+
+/* define number */
 #define __le8 uint8_t
 #define __le16 uint16_t
 #define __le32 uint32_t
@@ -29,6 +67,9 @@
 
 #define EXT4_EH_MAGIC	0xf30a
 
+#define EXT4_READ 0
+#define EXT4_WRITE 1
+
 /* we can use mkfs.ext4 -b option to specify the block size, here I set it to 1024 bytes, see manual */
 #define EXT4_BLOCK_SIZE			1024
 /* the max counts of block group*/
@@ -37,7 +78,7 @@
 /* convert block counts to sector counts, one ext4 block size equals to ? physical sector size */
 #define EXT4_BLOCK2SECTOR_CNT		EXT4_BLOCK_SIZE / SECTOR_SIZE
 
-#define EXT4_BLOCKNUM2SECTORNUM(num)	num*EXT4_BLOCK2SECTOR_CNT
+#define EXT4_BLOCKNO2SECTORNO(num)	num*EXT4_BLOCK2SECTOR_CNT
 
 #define EXT4_LABEL_MAX			16
 
@@ -416,7 +457,9 @@ typedef struct ext4_extent_tail ext4_extent_tail_t;
 typedef struct ext4_dir_entry_2	ext4_dir_entry_2_t;
 
 int ext4_fill_super();
-ext4_inode_t *ext4_read_ondisk_inode(int inode_num);
+void ext4_rw_ondisk_inode(int inode_num, ext4_inode_t *pinode, int rw);
 int ext4_readdir(ext4_inode_t *pinode, int offset, void *buf, int len);
+ext4_inode_t *ext4_create_inode(ext4_inode_t *parent_inode, int type);
+void bwrite(struct buf *b);
 
 #endif	/* _EXT4_H */

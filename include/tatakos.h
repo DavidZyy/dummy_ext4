@@ -5,7 +5,7 @@
  * @date 2023-03-10
  * 
  * @copyright Copyright (c) 2023
- * the codes here is to make the ext4 protable to tatakos
+ * The codes here is to make the ext4 protable to tatakos
  */
 #ifndef _BIO_H
 #define _BIO_H
@@ -26,11 +26,17 @@
 
 #define ALIGN(a, align) ((a + (align - 1)) & ~(align - 1))
 
+#define grn(str) 	"\e[32;1m"str"\e[0m"
+#define ylw(str) 	"\e[33;1m"str"\e[0m"
+#define rd(str) 	"\e[31;1m"str"\e[0m"
+#define bl(str) 	"\e[34;1m"str"\e[0m"
+
 struct buf {
   int valid;   // has data been read from disk?
   int dirty;
   int disk;    // does disk "own" buf?
   uint32_t dev;
+  /* sector number of disk */
   uint32_t blockno;
   // struct sleeplock lock;
   // uint refcnt;
@@ -55,5 +61,6 @@ typedef struct buf buf_t;
 
 
 buf_t* bread(uint32_t dev, uint32_t blockno);
+void panic(char *s);
 
 #endif
