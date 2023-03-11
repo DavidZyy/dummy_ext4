@@ -15,7 +15,7 @@
 #define _EXT4_H
 
 #include <stdint.h>
-#include "bio.h"
+#include "tatakos.h"
 
 #define __le8 uint8_t
 #define __le16 uint16_t
@@ -27,7 +27,7 @@
 #define __u32 uint32_t
 #define __u64 uint64_t
 
-
+#define EXT4_EH_MAGIC	0xf30a
 
 /* we can use mkfs.ext4 -b option to specify the block size, here I set it to 1024 bytes, see manual */
 #define EXT4_BLOCK_SIZE			1024
@@ -40,6 +40,8 @@
 #define EXT4_BLOCKNUM2SECTORNUM(num)	num*EXT4_BLOCK2SECTOR_CNT
 
 #define EXT4_LABEL_MAX			16
+
+#define EXT4_NAME_LEN				255
 
 /* Padding is at the most beginning of the disk layout */
 #define EXT4_GROUP0_PADDING_BYTES 	1024
@@ -61,7 +63,60 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-/* Finding an inode */
+/*
+ * Inode flags
+ */
+#define	EXT4_SECRM_FL			0x00000001 /* Secure deletion */
+#define	EXT4_UNRM_FL			0x00000002 /* Undelete */
+#define	EXT4_COMPR_FL			0x00000004 /* Compress file */
+#define EXT4_SYNC_FL			0x00000008 /* Synchronous updates */
+#define EXT4_IMMUTABLE_FL		0x00000010 /* Immutable file */
+#define EXT4_APPEND_FL			0x00000020 /* writes to file may only append */
+#define EXT4_NODUMP_FL			0x00000040 /* do not dump file */
+#define EXT4_NOATIME_FL			0x00000080 /* do not update atime */
+/* Reserved for compression usage... */
+#define EXT4_DIRTY_FL			0x00000100
+#define EXT4_COMPRBLK_FL		0x00000200 /* One or more compressed clusters */
+#define EXT4_NOCOMPR_FL			0x00000400 /* Don't compress */
+	/* nb: was previously EXT2_ECOMPR_FL */
+#define EXT4_ENCRYPT_FL			0x00000800 /* encrypted file */
+/* End compression flags --- maybe not all used */
+#define EXT4_INDEX_FL			0x00001000 /* hash-indexed directory */
+#define EXT4_IMAGIC_FL			0x00002000 /* AFS directory */
+#define EXT4_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
+#define EXT4_NOTAIL_FL			0x00008000 /* file tail should not be merged */
+#define EXT4_DIRSYNC_FL			0x00010000 /* dirsync behaviour (directories only) */
+#define EXT4_TOPDIR_FL			0x00020000 /* Top of directory hierarchies*/
+#define EXT4_HUGE_FILE_FL               0x00040000 /* Set to each huge file */
+#define EXT4_EXTENTS_FL			0x00080000 /* Inode uses extents */
+#define EXT4_VERITY_FL			0x00100000 /* Verity protected inode */
+#define EXT4_EA_INODE_FL	        0x00200000 /* Inode used for large EA */
+/* 0x00400000 was formerly EXT4_EOFBLOCKS_FL */
+
+#define EXT4_DAX_FL			0x02000000 /* Inode is DAX */
+
+#define EXT4_INLINE_DATA_FL		0x10000000 /* Inode has inline data. */
+#define EXT4_PROJINHERIT_FL		0x20000000 /* Create with parents projid */
+#define EXT4_CASEFOLD_FL		0x40000000 /* Casefolded directory */
+#define EXT4_RESERVED_FL		0x80000000 /* reserved for ext4 lib */
+
+
+/*
+ * Ext4 directory file types.  Only the low 3 bits are used.  The
+ * other bits are reserved for now.
+ */
+#define EXT4_FT_UNKNOWN		0
+#define EXT4_FT_REG_FILE	1
+#define EXT4_FT_DIR		2
+#define EXT4_FT_CHRDEV		3
+#define EXT4_FT_BLKDEV		4
+#define EXT4_FT_FIFO		5
+#define EXT4_FT_SOCK		6
+#define EXT4_FT_SYMLINK		7
+
+#define EXT4_FT_MAX		8
+
+#define EXT4_FT_DIR_CSUM	0xDE
 
 
 /*
@@ -198,7 +253,6 @@ struct ext4_super_block {
 	uint32_t	s_checksum;		/* crc32c(superblock) */
 };
 
-
 /*
  * Structure of an inode on the disk
  */
@@ -293,11 +347,76 @@ struct ext4_group_desc
 	__u32   bg_reserved;
 };
 
+/*
+ * This is the extent tail on-disk structure.
+ * All other extent structures are 12 bytes long.  It turns out that
+ * block_size % 12 >= 4 for at least all powers of 2 greater than 512, which
+ * covers all valid ext4 block sizes.  Therefore, this tail structure can be
+ * crammed into the end of the block without having to rebalance the tree.
+ */
+struct ext4_extent_tail {
+	__le32	et_checksum;	/* crc32c(uuid+inum+extent_block) */
+};
+
+/*
+ * This is the extent on-disk structure.
+ * It's used at the bottom of the tree.
+ */
+struct ext4_extent {
+	__le32	ee_block;	/* first logical block extent covers */
+	__le16	ee_len;		/* number of blocks covered by extent */
+	__le16	ee_start_hi;	/* high 16 bits of physical block */
+	__le32	ee_start_lo;	/* low 32 bits of physical block */
+};
+
+/*
+ * This is index on-disk structure.
+ * It's used at all the levels except the bottom.
+ */
+struct ext4_extent_idx {
+	__le32	ei_block;	/* index covers logical blocks from 'block' */
+	__le32	ei_leaf_lo;	/* pointer to the physical block of the next *
+				 * level. leaf or next index could be there */
+	__le16	ei_leaf_hi;	/* high 16 bits of physical block */
+	__u16	ei_unused;
+};
+
+/*
+ * Each block (leaves and indexes), even inode-stored has header.
+ */
+struct ext4_extent_header {
+	__le16	eh_magic;	/* probably will support different formats */
+	__le16	eh_entries;	/* number of valid entries */
+	__le16	eh_max;		/* capacity of store in entries */
+	__le16	eh_depth;	/* has tree real underlying blocks? */
+	__le32	eh_generation;	/* generation of the tree */
+};
+
+/*
+ * The new version of the directory entry.  Since EXT4 structures are
+ * stored in intel byte order, and the name_len field could never be
+ * bigger than 255 chars, it's safe to reclaim the extra byte for the
+ * file_type field.
+ */
+struct ext4_dir_entry_2 {
+	__le32 inode; /* Inode number */
+	__le16 rec_len; /* Directory entry length */
+	__u8 name_len; /* Name length */
+	__u8 file_type; /* See file type macros EXT4_FT_* below */
+	char name[EXT4_NAME_LEN]; /* File name */
+};
 
 typedef struct ext4_super_block ext4_super_block_t;
 typedef struct ext4_group_desc ext4_group_desc_t;
 typedef struct ext4_inode	ext4_inode_t;
+typedef struct ext4_extent_header ext4_extent_header_t;
+typedef struct ext4_extent_idx ext4_extent_idx_t;
+typedef struct ext4_extent ext4_extent_t;
+typedef struct ext4_extent_tail ext4_extent_tail_t;
+typedef struct ext4_dir_entry_2	ext4_dir_entry_2_t;
 
 int ext4_fill_super();
-int ext4_read_ondisk_inode(int inode_num);
+ext4_inode_t *ext4_read_ondisk_inode(int inode_num);
+int ext4_readdir(ext4_inode_t *pinode, int offset, void *buf, int len);
+
 #endif	/* _EXT4_H */

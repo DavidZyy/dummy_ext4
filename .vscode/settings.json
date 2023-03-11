@@ -13,6 +13,7 @@
     "*.tcc": "c",
     "memory_resource": "c",
     "memory": "c",
-    "ostream": "c"
+    "ostream": "c",
+    "stdlib.h": "c"
   }
 }

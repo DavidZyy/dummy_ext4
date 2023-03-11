@@ -10,9 +10,10 @@
  * We can mount a formated file like mount a real device.
  * These codes is used to test the correctness of dummy filesystems like fat32 or ext4 we implemented.
  * NOTE: I define the struct like this to be compatible with our os interface.
+ * The codes here is to make the ext4 portable to tatakos
  */
 
-#include "bio.h"
+#include "tatakos.h"
 #include <unistd.h>
 #include <fcntl.h>
 

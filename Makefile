@@ -16,7 +16,7 @@ TESTDIR = test
 SRCDIR = src
 BUILDDIR = build
 
-SRC = $(SRCDIR)/bio.c $(SRCDIR)/ext4.c
+SRC = $(SRCDIR)/tatakos.c $(SRCDIR)/ext4.c
 SRC += $(TESTDIR)/$(TEST).c
 
 OBJ = $(BUILDDIR)/$(TEST)

@@ -1,11 +1,14 @@
 #include<stdio.h>
-#include "bio.h"
+#include "tatakos.h"
 #include "ext4.h"
+#include "stdlib.h"
 
 int main(){
-  // struct buf * b = bread(0, 2);
-  // printf("%x\n", *(b->data + 1));
-  // printf("%d\n", sizeof(struct ext4_super_block));
   ext4_fill_super();
-  ext4_read_ondisk_inode(EXT4_ROOT_DIR_INODE_NUM);
+  ext4_inode_t *pinode;
+  pinode = ext4_read_ondisk_inode(EXT4_ROOT_DIR_INODE_NUM);
+  void *buf = malloc(EXT4_BLOCK_SIZE);
+  /* readdir */ 
+  ext4_readdir(pinode, 0, buf, EXT4_BLOCK_SIZE);
+  /* create a file */
 }
