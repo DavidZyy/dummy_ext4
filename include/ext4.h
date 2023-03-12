@@ -461,5 +461,6 @@ void ext4_rw_ondisk_inode(int inode_num, ext4_inode_t *pinode, int rw);
 int ext4_readdir(ext4_inode_t *pinode, int offset, void *buf, int len);
 ext4_inode_t *ext4_create_inode(ext4_inode_t *parent_inode, int type);
 void bwrite(struct buf *b);
+void TODO();
 
 #endif	/* _EXT4_H */

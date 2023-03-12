@@ -53,6 +53,10 @@ void bwrite(struct buf *b){
   close(fd);
 }
 
+void TODO(){
+  printf(ylw("TODO SOMTHING HERE\n"));
+}
+
 void panic(char *s) {
   printf(rd("panic: "));
   printf(rd("%s"), s);

@@ -23,7 +23,9 @@ OBJ = $(BUILDDIR)/$(TEST)
 
 CFLAGS = -Iinclude -g
 
-run:
+compile:
 	mkdir -p $(BUILDDIR)
 	gcc -o $(OBJ) $(CFLAGS) $(SRC)
+
+run:compile
 	$(OBJ)

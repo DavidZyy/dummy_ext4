@@ -8,8 +8,8 @@ int main(){
 
   ext4_fill_super();
 
-  // ext4_rw_ondisk_inode(EXT4_ROOT_DIR_INODE_NUM, proot_inode, EXT4_READ);
-  ext4_rw_ondisk_inode(12, proot_inode, EXT4_READ);
+  ext4_rw_ondisk_inode(EXT4_ROOT_DIR_INODE_NUM, proot_inode, EXT4_READ);
+  // ext4_rw_ondisk_inode(12, proot_inode, EXT4_READ);
 
   void *buf = malloc(EXT4_BLOCK_SIZE);
   /* readdir */ 

@@ -69,9 +69,60 @@ int ext4_fill_super(){
   }
   assert(free_inode_cnt == es.s_free_inodes_count);
   assert(free_block_cnt == es.s_free_blocks_count_lo);
-
 }
 
+/**
+ * Read or Write super block and block group descriptor on disk.
+ */
+int ext4_rw_ondisk_super_bgd(int rw){
+  int i;
+  ext4_super_block_t *pes = &es;
+
+  if(rw == EXT4_READ){
+    /* The first 1024 bytes (block 0) is empty , 
+      so we begin form the block 1 . */
+    ext4_rw_ondisk_block(1, ext4_block_buff, rw);
+    memcpy(pes, ext4_block_buff, sizeof(ext4_super_block_t));
+    assert(1<<(10 + es.s_log_block_size) == EXT4_BLOCK_SIZE);
+
+    bg_cnts = pes->s_blocks_count_lo / pes->s_blocks_per_group + 1;
+    assert(bg_cnts < EXT4_MAX_BG_CNT);
+    assert(bg_cnts * sizeof(ext4_group_desc_t) <= sizeof(ext4_block_buff)); //assume all block group descriptors only in one block
+
+    /* read block group descriptor, padding bytes + one super block bytes */
+    ext4_rw_ondisk_block(2, ext4_block_buff, rw);
+    int free_inode_cnt = 0, free_block_cnt = 0;
+    for(i = 0; i < bg_cnts; i++){
+      memcpy(egd + i, ext4_block_buff + i*sizeof(ext4_group_desc_t), 
+            sizeof(ext4_group_desc_t));
+      free_inode_cnt += egd[i].bg_free_inodes_count_lo;
+      free_block_cnt += egd[i].bg_free_blocks_count_lo;
+    }
+    assert(free_inode_cnt == es.s_free_inodes_count);
+    assert(free_block_cnt == es.s_free_blocks_count_lo);
+
+  } else if (rw == EXT4_WRITE) {
+    /* write super block */
+    memcpy(ext4_block_buff, pes, sizeof(ext4_super_block_t));
+    ext4_rw_ondisk_block(1, ext4_block_buff, rw);
+
+    int free_inode_cnt = 0, free_block_cnt = 0;
+    for(i = 0; i < bg_cnts; i++){
+      memcpy(ext4_block_buff + i*sizeof(ext4_group_desc_t), egd+i, sizeof(ext4_group_desc_t));
+      free_inode_cnt += egd[i].bg_free_inodes_count_lo;
+      free_block_cnt += egd[i].bg_free_blocks_count_lo;
+    }
+    assert(free_inode_cnt == es.s_free_inodes_count);
+    assert(free_block_cnt == es.s_free_blocks_count_lo);
+    ext4_rw_ondisk_block(2, ext4_block_buff, rw);
+  } else {
+    panic("rw type error");
+  }
+
+  // another version of codes doing the samething
+  // int i;
+  // ext4_super_block_t *pes = &es;
+}
 
 /**
  * use this function to find the block group that an inode lives in
@@ -112,11 +163,10 @@ void ext4_rw_ondisk_inode(int inode_num, ext4_inode_t *pinode, int rw){
   if(rw == EXT4_READ)
     memcpy(pinode, ext4_block_buff + inode_block_off, sizeof(ext4_inode_t));
   else if (rw == EXT4_WRITE) {
+    /* Confirm there is no content before */
+    assert(*(uint64_t *)(ext4_block_buff + inode_block_off) == 0);
     memcpy(ext4_block_buff + inode_block_off, pinode, sizeof(ext4_inode_t));
-    // ext4_write_
-    // todo();
     ext4_rw_ondisk_block(blockno, ext4_block_buff, EXT4_WRITE);
-
   } else {
     panic("rw error");
   }
@@ -186,9 +236,11 @@ void ext4_traverse_extent_tree_recursively(ext4_extent_header_t *peh, int offset
   assert(peh->eh_magic = EXT4_EH_MAGIC);
   assert(sizeof(ext4_extent_header_t) == sizeof(ext4_extent_idx_t));
   assert(sizeof(ext4_extent_idx_t) == sizeof(ext4_extent_t));
-  /* the three struct has the same size (12 bytes) and the former two
+  /* The three struct has the same size (12 bytes) and the former two
     is at the next of ext4_extent_header */
-  pextent_idx = pextent = peh + 1;
+  
+  pextent_idx = (ext4_extent_idx_t *)peh + 1; 
+  pextent = (ext4_extent_t *)peh + 1;
 
   if(peh->eh_depth == 0){
     // data_block_buff = kmalloc(EXT4_BLOCK_SIZE);
@@ -216,7 +268,7 @@ void ext4_traverse_extent_tree_recursively(ext4_extent_header_t *peh, int offset
 }
 
 /**
- * Used for ls command, sys_getdents64 system call
+ * Used for "ls" command, "sys_getdents64" system call
  */
 int ext4_readdir(ext4_inode_t *pinode, int offset, void *buf, int len){
   // int i, j;
@@ -258,29 +310,58 @@ int ext4_readdir(ext4_inode_t *pinode, int offset, void *buf, int len){
 }
 
 /**
+ * find and set several empty bits on bitmaps of inode and block.
+ */
+int ext4_find_set_bitmap(){
+
+}
+
+#define UP_FR_IND 0
+#define UP_FR_BLK 1
+
+/**
+ * Update the free inode count and the free block count.
+ * use type to choose inode or block, use groupid to choose block group,
+ * if cnt is negative, the free counts decrese, or it increse.
+ */
+static void ext4_update_free_ib_cnt(int type, int groupid, int cnt){
+  if(type == UP_FR_IND){
+    es.s_free_inodes_count += cnt;
+    egd[groupid].bg_free_inodes_count_lo += cnt;
+  } else if (type == UP_FR_BLK){
+    es.s_free_blocks_count_lo += cnt;
+    egd[groupid].bg_free_blocks_count_lo += cnt;
+  } else {
+    panic("no such update type");
+  }
+}
+
+/**
  * Allocate and return an inode number.
  * Note that the inode number is begin from 1.
  */
 int ext4_get_inodeno(){
-  int i, bg_no;
+  int i;
   void *imap_block_buff;
   void *itable_block_buff;
   int inode_no = 0;
+  int bitmap_blockno;
 
   /* find a block group that has free inode */
   for(i = 0; i < bg_cnts; i ++){
     inode_no = i*es.s_inodes_per_group;
     if(egd[i].bg_free_inodes_count_lo){
-      bg_no = i;
+      /* one group has only one inode bitmap */
+      bitmap_blockno = egd[i].bg_inode_bitmap_lo;
       break;
     }
   } 
 
-  if(bg_no == bg_cnts)
+  if(i == bg_cnts)
     panic("no free inodes");
   
   imap_block_buff = kmalloc(EXT4_BLOCK_SIZE);
-  ext4_rw_ondisk_block(egd[i].bg_inode_bitmap_lo, imap_block_buff, EXT4_READ);
+  ext4_rw_ondisk_block(bitmap_blockno, imap_block_buff, EXT4_READ);
   for(i = 0; i < es.s_inodes_per_group; i++){
     // char a = *(char *)(imap_block_buff + i/8);
     char *a = ((char *)(imap_block_buff) + i/8);
@@ -290,13 +371,78 @@ int ext4_get_inodeno(){
       break;
     }
   }
+  ext4_rw_ondisk_block(bitmap_blockno, imap_block_buff, EXT4_WRITE);
+  ext4_update_free_ib_cnt(UP_FR_IND, i, -1);
 
-  egd[i].bg_free_inodes_count_lo--;
-  // ext4_write_ondisk_block(egd[i].bg_inode_bitmap_lo, imap_block_buff);
+  // egd[i].bg_free_inodes_count_lo--;
   kfree(imap_block_buff);
 
-  /* the inode number begin with 1 */
+  /* the inode number begin with 1, not 0, so we need to plus 1 when return */
   return inode_no + 1;
+}
+
+static void ext4_set_new_inode(ext4_inode_t *new_inode, int type){
+  ext4_extent_header_t *peh;
+  ext4_extent_t *pextent;
+
+  new_inode->i_mode = S_IRWXO | S_IRWXG | S_IRWXU | type;
+  new_inode->i_size_lo = 0;
+  new_inode->i_atime = new_inode->i_ctime = new_inode->i_mtime = 0xffffffff;
+  new_inode->i_links_count = 1;
+  new_inode->i_blocks_lo = 1;
+  new_inode->i_flags |= EXT4_EXTENTS_FL; //use extent tree
+
+  /* set extent header */
+  peh = (ext4_extent_header_t *)new_inode->i_block;
+  peh->eh_magic = EXT4_EH_MAGIC;
+  peh->eh_entries = 1;
+  peh->eh_max = sizeof(new_inode->i_block) / sizeof(ext4_extent_header_t) - 1;
+  peh->eh_depth = 0;
+  peh->eh_generation = 0;
+
+  /* set the first extent behind the header */
+  pextent = (ext4_extent_t *)peh + 1;
+  pextent->ee_block = 0;
+  pextent->ee_len = 0;
+  pextent->ee_start_hi = 0;
+  pextent->ee_start_lo = 0;
+}
+
+/**
+ * Allocate and append block_cnt blocks to inode.
+ * Find the last struct ext4_extent of pinode extent tree, if
+ * 1. there are enough blocks behind the scope of ext4_extent indicates, we just need to modify it's ee_len field.
+ * 2. there are not enough blocks, we should allocate the blocks as much as we can, and find one or more new contiguous
+ *    areas on disk, than create several new ext4_extent to describe it.
+ */
+void ext4_alloc_block(ext4_inode_t *pinode, int block_cnt){
+  ext4_extent_header_t *peh;
+  ext4_extent_t *pextent;
+
+  peh = (ext4_extent_header_t *)(pinode->i_block);
+
+  /* for simplicity, not support extent tree which depth > 0 now */
+  assert(peh->eh_depth == 0);
+
+  /* get the last struct ext4_extent */
+  pextent = (ext4_extent_t *)peh + peh->eh_entries;
+
+  TODO();
+  /* find a block group that has free blocks */
+//   for
+//   if(pextent->ee_len == 0){
+// 
+//   } else {
+// 
+//   }
+
+}
+
+/**
+ * Convert new_inode to struct ext4_dir_entry_2 and write it to parent_inode's data block.
+ */
+void ext4_write_dir_entry(ext4_inode_t *parent_inode, ext4_inode_t *new_inode){
+
 }
 
 /**
@@ -307,17 +453,20 @@ int ext4_get_inodeno(){
  * 4. write the dir entry of the inode into its parent's data block. 
  */
 ext4_inode_t *ext4_create_inode(ext4_inode_t *parent_inode, int type){
-  int new_inodeno = ext4_get_inodeno();
-  printf("%d\n", new_inodeno);
-  ext4_inode_t *new_inode = kmalloc(sizeof(ext4_inode_t));
+  int new_inodeno;
+  ext4_inode_t *new_inode;
+
+  new_inodeno = ext4_get_inodeno();
+  new_inode = kmalloc(sizeof(ext4_inode_t));
   
-  new_inode->i_mode = S_IRWXO | S_IRWXG | S_IRWXU | type;
-  new_inode->i_size_lo = 0;
-  new_inode->i_atime = new_inode->i_ctime = new_inode->i_mtime = 0xffffffff;
-  new_inode->i_links_count = 1;
-  new_inode->i_blocks_lo = 1;
-  new_inode->i_flags |= EXT4_EXTENTS_FL;
+  ext4_set_new_inode(new_inode, type);
 
   ext4_rw_ondisk_inode(new_inodeno, new_inode, EXT4_WRITE);
+
+  ext4_alloc_block(new_inode, 1);
+
+  ext4_write_dir_entry(parent_inode, new_inode);
+
   kfree(new_inode);
+  printf("%d\n", new_inodeno);
 }
