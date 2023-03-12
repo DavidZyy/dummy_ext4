@@ -21,7 +21,7 @@ SRC += $(TESTDIR)/$(TEST).c
 
 OBJ = $(BUILDDIR)/$(TEST)
 
-CFLAGS = -Iinclude -g
+CFLAGS = -Iinclude -g -Wall
 
 compile:
 	mkdir -p $(BUILDDIR)

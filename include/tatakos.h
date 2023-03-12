@@ -61,6 +61,8 @@ typedef struct buf buf_t;
 
 
 buf_t* bread(uint32_t dev, uint32_t blockno);
+void bwrite(struct buf *b);
 void panic(char *s);
+void TODO();
 
 #endif

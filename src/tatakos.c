@@ -26,13 +26,14 @@ const char *fs_img = "/home/zhuyangyang/project/OS/dummy_ext4/ext4_fs.img";
 /**
  * The block here refers to sector.
  */
-struct buf* bread(uint32_t dev, uint32_t blockno)
+struct buf* bread(uint32_t dev, uint32_t sectorno)
 {
   struct buf *b = &buffer;
 
   int fd = open(fs_img, O_RDWR);
 
-  lseek(fd, blockno*SECTOR_SIZE, SEEK_SET);
+  /* if at the end of the file, will it report ? */
+  lseek(fd, sectorno*SECTOR_SIZE, SEEK_SET);
 
   read(fd, b->data, SECTOR_SIZE);
 

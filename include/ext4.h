@@ -204,7 +204,7 @@ struct ext4_super_block {
 	 */
 	uint32_t	s_first_ino;		/* First non-reserved inode */
 	uint16_t  s_inode_size;		/* size of inode structure */
-	uint16_t	s_block_group_nr;	/* block group # of this superblock */
+	uint16_t	s_block_group_nr;	/* block group # of this superblock，不是总块组数，是当前超级块所在的块组  */
 	uint32_t	s_feature_compat;	/* compatible feature set */
 /*60*/	uint32_t	s_feature_incompat;	/* incompatible feature set */
 	uint32_t	s_feature_ro_compat;	/* readonly-compatible feature set */
@@ -307,7 +307,7 @@ struct ext4_inode {
 	__le32	i_dtime;	/* Deletion Time */
 	__le16	i_gid;		/* Low 16 bits of Group Id */
 	__le16	i_links_count;	/* Links count */
-	__le32	i_blocks_lo;	/* Blocks count */
+	__le32	i_blocks_lo;	/* Blocks count, 注意，这个字段不是指ext4文件的块（block）数，而是指磁盘扇区数，见文档4.1 */
 	__le32	i_flags;	/* File flags */
 	union {
 		struct {
@@ -404,7 +404,7 @@ struct ext4_extent_tail {
  * It's used at the bottom of the tree.
  */
 struct ext4_extent {
-	__le32	ee_block;	/* first logical block extent covers */
+	__le32	ee_block;	/* first logical block extent covers 逻辑block是指文件的逻辑块？ */
 	__le16	ee_len;		/* number of blocks covered by extent */
 	__le16	ee_start_hi;	/* high 16 bits of physical block */
 	__le32	ee_start_lo;	/* low 32 bits of physical block */
@@ -460,7 +460,7 @@ int ext4_fill_super();
 void ext4_rw_ondisk_inode(int inode_num, ext4_inode_t *pinode, int rw);
 int ext4_readdir(ext4_inode_t *pinode, int offset, void *buf, int len);
 ext4_inode_t *ext4_create_inode(ext4_inode_t *parent_inode, int type);
-void bwrite(struct buf *b);
-void TODO();
+int ext4_rw_ondisk_super_bgd(int rw);
+void ext4_rw_ondisk_block(int blockno, void *buff, int rw);
 
 #endif	/* _EXT4_H */
