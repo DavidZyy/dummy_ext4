@@ -29,8 +29,8 @@ int main(){
   /* readdir */ 
   ext4_readdir(proot_inode, 0, buf, EXT4_BLOCK_SIZE);
   /* create an inode of dir or file on disk */
-  ext4_create_inode(proot_inode, S_IFDIR);
-  // ext4_create_inode(proot_inode, S_IFREG);
+  // ext4_create_inode(proot_inode, T_FILE);
+  ext4_create_inode(proot_inode, S_IFREG);
   
   ext4_rw_ondisk_super_bgd(EXT4_WRITE);
   kfree(proot_inode);

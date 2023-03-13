@@ -13,6 +13,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 ext4_super_block_t es;
 /* The descriptors of block group.
@@ -535,10 +536,61 @@ success:
   return;
 }
 
+void ext4_set_dir_entry(ext4_dir_entry_2_t* dir_entry, int inodeno, int rec_len, int dir_type, char *name){
+  dir_entry->inode = inodeno;
+  dir_entry->rec_len = rec_len;
+  dir_entry->name_len = strlen(name);
+  dir_entry->file_type = dir_type;
+  /* sizeof(name)-1: donot copy '\0' */
+  memcpy(dir_entry->name, name, strlen(name));
+}
+
 /**
  * Convert new_inode to struct ext4_dir_entry_2 and write it to parent_inode's data block.
  */
-void ext4_write_dir_entry(ext4_inode_t *parent_inode, ext4_inode_t *new_inode){
+void ext4_write_dir_entry(ext4_inode_t *parent_inode, int inodeno, int dir_type, char *name){
+  int block_off = 0, blockno;
+  ext4_dir_entry_2_t *p_dir_entry;
+  void *data_buff;
+  ext4_extent_header_t *peh;
+  ext4_extent_t *pextent;
+
+  // panic("modify the file when it is mounded to see if it work");
+  peh = (ext4_extent_header_t *)(parent_inode->i_block);
+  assert(peh->eh_depth == 0);
+  assert(peh->eh_entries > 0);
+  /* get the last extent's last block */
+  pextent = (ext4_extent_t *)peh + peh->eh_entries;
+  /* the last data block of parent_inode */
+  blockno = pextent->ee_start_lo + pextent->ee_len - 1;
+  
+  data_buff = kmalloc(EXT4_BLOCK_SIZE);
+  ext4_rw_ondisk_block(blockno, data_buff, EXT4_READ);
+  while(1){
+    p_dir_entry = (ext4_dir_entry_2_t *)(data_buff + block_off);
+    /* The last dir entry in the block */
+    if(p_dir_entry->rec_len + block_off == EXT4_BLOCK_SIZE - 0x0C){
+      int len1 = ALIGN(4+2+1+1+p_dir_entry->name_len, 4);
+      int len2 = ALIGN(4+2+1+1+strlen(name), 4);
+      if(p_dir_entry->rec_len - len1 >= len2){
+        int origin = p_dir_entry->rec_len;
+        p_dir_entry->rec_len = len1;
+        block_off += p_dir_entry->rec_len;
+        p_dir_entry = (ext4_dir_entry_2_t *)(data_buff + block_off);
+        ext4_set_dir_entry(p_dir_entry, inodeno, origin-len1, dir_type, name);
+        break;
+      } else {
+        panic("the block is full!");
+      }
+    }
+    block_off += p_dir_entry->rec_len;
+  }
+  ext4_rw_ondisk_block(blockno, data_buff, EXT4_WRITE);
+  kfree(data_buff);
+
+}
+
+void ext4_generate_dot(){
 
 }
 
@@ -561,7 +613,15 @@ ext4_inode_t *ext4_create_inode(ext4_inode_t *parent_inode, int type){
 
   ext4_alloc_block(new_inode, 1);
 
-  ext4_write_dir_entry(parent_inode, new_inode);
+  /* the length not include '\0' */
+  char *name = "zyy123";
+  // printf("%d\n", strlen(name));
+
+  int dir_type = type == S_IFDIR ? EXT4_FT_DIR : EXT4_FT_REG_FILE;
+  ext4_write_dir_entry(parent_inode, new_inodeno, dir_type, name);
+  if(type == T_DIR){
+    ext4_generate_dot();
+  }
 
   ext4_rw_ondisk_inode(new_inodeno, new_inode, EXT4_WRITE);
   kfree(new_inode);
