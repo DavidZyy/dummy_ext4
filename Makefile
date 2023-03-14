@@ -16,12 +16,12 @@ TESTDIR = test
 SRCDIR = src
 BUILDDIR = build
 
-SRC = $(SRCDIR)/tatakos.c $(SRCDIR)/ext4.c
+SRC = $(SRCDIR)/tatakos.c $(SRCDIR)/ext4.c $(SRCDIR)/crc32.c
 SRC += $(TESTDIR)/$(TEST).c
 
 OBJ = $(BUILDDIR)/$(TEST)
 
-CFLAGS = -Iinclude -g -Wall
+CFLAGS = -Iinclude -g -Wall -lz
 
 compile:
 	mkdir -p $(BUILDDIR)

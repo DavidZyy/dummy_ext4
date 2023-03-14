@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <zlib.h>
+
 ext4_super_block_t es;
 /* The descriptors of block group.
   The number of block groups is the size of the device divided by the size of a block group. */
@@ -27,6 +29,12 @@ uint8_t ext4_block_buff[EXT4_BLOCK_SIZE];
 ext4_inode_t inode;
 
 extern struct buf buffer;
+
+extern uint32_t
+calculate_crc32c(uint32_t crc32c,
+    const unsigned char *buffer,
+    unsigned int length);
+
 /**
  * read or write the content of block with the number of blockno on disk into buffer.
  */
@@ -81,15 +89,25 @@ int ext4_fill_super(){
   assert(free_block_cnt == es.s_free_blocks_count_lo);
 }
 
+extern uint32_t
+singletable_crc32c(uint32_t crc, const void *buf, uint32_t size);
+
+extern uint32_t crc32c(uint32_t crc, const uint8_t *data, unsigned int length);
 /**
  * Read or Write super block and block group descriptor on disk.
  */
 int ext4_rw_ondisk_super_bgd(int rw){
   int i;
   ext4_super_block_t *pes = &es;
+  uint32_t crc;
 
-  if(rw == EXT4_WRITE)
+  if(rw == EXT4_WRITE){
+    // TODO(checksum);
+    // int chk = ext4_chksum((unsigned int *)&es, EXT4_BLOCK_SIZE/sizeof(unsigned int));
+    TODO();
+    pes->s_checksum = crc32c(pes->s_checksum, (uint8_t *)pes, 1024);
     memcpy(ext4_block_buff, pes, sizeof(ext4_super_block_t));
+  }
 
   /* The first 1024 bytes (block 0) is empty , 
     so we begin form the block 1 . */
@@ -97,6 +115,20 @@ int ext4_rw_ondisk_super_bgd(int rw){
   
   if(rw == EXT4_READ)
     memcpy(pes, ext4_block_buff, sizeof(ext4_super_block_t));
+
+
+///////////////////////////////////////////////////////////////////////////////////
+  #define offsetof(t, d) __builtin_offsetof(t, d)
+	int offset = offsetof(ext4_super_block_t, s_checksum);
+
+  ext4_super_block_t *pes2  = kmalloc(sizeof(ext4_super_block_t));
+  memcpy(pes2, pes, 1024);
+  pes2->s_checksum = 0;
+  // crc = ~0;
+  crc = crc32c(~0, (uint8_t *)pes, offset);
+  assert(crc == pes->s_checksum);
+///////////////////////////////////////////////////////////////////////////////////
+
 
   assert(1<<(10 + es.s_log_block_size) == EXT4_BLOCK_SIZE);
 
